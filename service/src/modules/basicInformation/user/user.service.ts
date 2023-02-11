@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { InjectEntityManager, InjectRepository } from "@nestjs/typeorm";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
@@ -14,14 +14,26 @@ import { HttpCode } from "@/common/enums/code.enum";
 import { CreateTokenDto } from "./dto/create-token.dto";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { UserRoleService } from "./role/user-role.service";
+import { RoleService } from "../role/role.service";
 import { FindUserListDto } from "./dto/find-user.list.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
+import { UserRoleEntity } from "./role/user-role.entity";
+import { RoleMenuEntity } from "../role/role-menu.entity";
+import { MenuEntity } from "../menu/menu.entity";
+import { transformTree } from "@/utils/utils";
+import _ from "lodash";
 @Injectable()
 export class UserService {
   constructor(
     // 数据库
     @InjectRepository(UserEntity)
     private readonly userEntity: Repository<UserEntity>,
+    @InjectRepository(UserRoleEntity)
+    private readonly userRoleEntity: Repository<UserRoleEntity>,
+    @InjectRepository(RoleMenuEntity)
+    private readonly roleMenuEntity: Repository<RoleMenuEntity>,
+    @InjectRepository(MenuEntity)
+    private readonly menuEntity: Repository<MenuEntity>,
     private readonly dataSource: DataSource,
     @InjectEntityManager()
     private readonly userManager: EntityManager,
@@ -109,6 +121,100 @@ export class UserService {
     const user = instanceToPlain(userInfo);
     return ResultData.success(
       { ...token, ...user },
+      `登录成功，欢迎${userInfo.account}`
+    );
+  }
+  /**
+   * 后台用户登录
+   * @param account
+   * @param password
+   * @returns
+   */
+  async adminLogin(account: string, password: string): Promise<ResultData> {
+    let userInfo = null;
+    if (validPhone(account)) {
+      // 手机登录
+      userInfo = await this.userEntity.findOne({ where: { phone: account } });
+    } else if (validEmail(account)) {
+      // 邮箱登录
+      userInfo = await this.userEntity.findOne({ where: { email: account } });
+    } else {
+      // 账号登录
+      userInfo = await this.userEntity.findOne({ where: { account } });
+    }
+    // ----  校验  ----
+    if (!userInfo)
+      return ResultData.fail(HttpCode.USER_PASSWORD_INVALID, "帐号或密码错误");
+    const checkPassword = await compare(password, userInfo.password);
+    if (!checkPassword)
+      return ResultData.fail(HttpCode.USER_PASSWORD_INVALID, "帐号或密码错误");
+    if (userInfo.status === 0)
+      return ResultData.fail(
+        HttpCode.USER_ACCOUNT_FORBIDDEN,
+        "您已被禁用，如需正常使用请联系管理员"
+      );
+    // 查询菜单
+    const menuList: any = await this.dataSource
+      .createQueryBuilder("nest_blog_user", "user")
+      .leftJoinAndSelect(
+        "nest_blog_user_role",
+        "userRole",
+        "userRole.user_id = user.id"
+      )
+      .leftJoinAndSelect("nest_blog_role", "role", "role.id = userRole.role_id")
+      .leftJoinAndSelect(
+        "nest_blog_role_menu",
+        "roleMenu",
+        "roleMenu.role_id = role.id"
+      )
+      .leftJoinAndSelect("nest_blog_menu", "menu", "menu.id = roleMenu.menu_id")
+      .where("user.id = :userId", { userId: userInfo.id })
+      .getRawMany();
+    const menuEntityList = [];
+    if (menuList[0]) {
+      if (
+        Number(menuList[0].role_available_range) === 0 ||
+        menuList[0].role_available_range === null
+      ) {
+        return ResultData.fail(
+          HttpCode.USER_ACCOUNT_FORBIDDEN,
+          "您暂无该权限访问后台系统"
+        );
+      }
+      // 判断是否有菜单权限，如若没有则无法进入页面
+      if (!menuList[0].menu_id) {
+        return ResultData.fail(
+          HttpCode.USER_ACCOUNT_FORBIDDEN,
+          "您暂无拥有菜单列表，无法访问后台系统"
+        );
+      }
+    }
+
+    for (const key in menuList) {
+      menuEntityList.push({
+        id: menuList[key]["menu_id"],
+        menuName: menuList[key]["menu_menu_name"],
+        menuType: menuList[key]["menu_menu_type"],
+        menuCode: menuList[key]["menu_menu_code"],
+        remark: menuList[key]["menu_remark"],
+        menuStatus: menuList[key]["menu_menu_status"],
+        parentId: menuList[key]["menu_parent_id"],
+        menuPath: menuList[key]["menu_menu_path"],
+        filePath: menuList[key]["menu_file_path"],
+        sort: menuList[key]["menu_sort"],
+        menuKey: menuList[key]["menu_menu_key"],
+        createDate: menuList[key]["menu_create_date"],
+        otherProperties: menuList[key]["menu_other_properties"],
+      });
+    }
+    // 生成树
+    const menus = transformTree(menuEntityList);
+    // ----  校验完成  ----
+    // 生成Token
+    const token = this.genToken({ id: userInfo.id });
+    const user = instanceToPlain(userInfo);
+    return ResultData.success(
+      { ...token, ...user, menus },
       `登录成功，欢迎${userInfo.account}`
     );
   }

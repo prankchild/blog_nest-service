@@ -255,4 +255,13 @@ export class RoleService {
     const result = await this.roleEntity.findBy({});
     return ResultData.success(result);
   }
+  // async getLoginRoleMenu(roleId: string): Promise<any> {
+  //   const result = await this.roleMenuEntity.find({
+  //     where: { roleId },
+  //   });
+  //   const menuIds = instanceToPlain(result).map((item) => {
+  //     return item.menuId;
+  //   });
+  //   return;
+  // }
 }

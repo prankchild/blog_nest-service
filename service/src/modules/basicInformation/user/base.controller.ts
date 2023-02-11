@@ -33,6 +33,13 @@ export class BaseController {
     return await this.userService.login(dto.account, dto.password);
   }
 
+  @Post("adminLogin")
+  @ApiOperation({ summary: "后台用户登录" })
+  @ApiResult(CreateTokenDto)
+  @AllowAnon()
+  async adminLogin(@Body() dto: LoginUserDto): Promise<ResultData> {
+    return await this.userService.adminLogin(dto.account, dto.password);
+  }
   // @Post('/update/token')
   // @ApiOperation({ summary: '刷新Token' })
   // async updateToken(@Req() req): Promise<ResultData> {

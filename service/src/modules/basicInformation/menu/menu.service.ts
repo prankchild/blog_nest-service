@@ -9,8 +9,9 @@ import { EntityManager, Repository } from "typeorm";
 import { CreateMenuDto } from "./dto/create-menu.dto";
 import { MenuEntity } from "./menu.entity";
 import { v4 as uuidV4 } from "uuid";
-import _, { cloneDeep } from "lodash";
+import _ from "lodash";
 import { UpdateMenuDto } from "./dto/update-menu.dto";
+import { transformTree } from "@/utils/utils";
 @Injectable()
 export class MenuService {
   constructor(
@@ -92,34 +93,4 @@ export class MenuService {
     // flatToTree(original);
     return ResultData.success(transformTree(original));
   }
-}
-function transformTree(original: any) {
-  const parents = original.filter((item: any) => item.parentId === null);
-  const children = original.filter((item: any) => item.parentId !== null);
-  tree(parents, children);
-  function tree(parents, children) {
-    for (let index = 0; index < parents.length; index++) {
-      const parent = parents[index];
-      for (let subIndex = 0; subIndex < children.length; subIndex++) {
-        const child = children[subIndex];
-        if (Number(child.parentId) === Number(parent.id)) {
-          const _children = _.cloneDeep(children);
-          _children.splice(subIndex, 1);
-          if (parent.children) {
-            parent.children = [...tree([child], _children), ...parent.children];
-          } else {
-            parent.children = [...tree([child], _children)];
-          }
-        }
-      }
-      if (parent.children && parent.children.length) {
-        const parentChildren = cloneDeep(parent.children);
-        parent.children = _.sortBy(parentChildren, (o) => {
-          return o.sort;
-        });
-      }
-    }
-    return parents;
-  }
-  return parents;
 }

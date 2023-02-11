@@ -13,10 +13,19 @@ import { UserService } from "./user.service";
 import { AuthModule } from "@/modules/auth/auth.module";
 import { UserRoleService } from "./role/user-role.service";
 import { RoleEntity } from "../role/role.entity";
+import { RoleMenuEntity } from "../role/role-menu.entity";
+import { RoleService } from "../role/role.service";
+import { MenuEntity } from "../menu/menu.entity";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([UserEntity, UserRoleEntity, RoleEntity]),
+    TypeOrmModule.forFeature([
+      UserEntity,
+      UserRoleEntity,
+      RoleEntity,
+      RoleMenuEntity,
+      MenuEntity,
+    ]),
     forwardRef(() => AuthModule),
     // 配置JWT
     JwtModule.registerAsync({
